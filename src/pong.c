@@ -1,76 +1,201 @@
-#include <stdio.h>  /* Подключаем printf() и getchar() для вывода и ввода. */
+#include <stdio.h>
 
-#define WIDTH 80       /* Полная ширина игрового поля в символах. */
-#define HEIGHT 25      /* Полная высота игрового поля в строках. */
-#define RACKET_SIZE 3  /* Высота каждой ракетки в символах. */
-#define WIN_SCORE 21   /* Количество очков, необходимое для победы. */
+#define WIDTH 80
+#define HEIGHT 25
+#define RACKET_SIZE 3
+#define WIN_SCORE 21
 
 /* Координаты и направление движения мяча. */
-int ball_x;   /* Горизонтальная координата мяча. */
-int ball_y;   /* Вертикальная координата мяча. */
-int ball_dx;  /* Направление по горизонтали: -1 влево, 1 вправо. */
-int ball_dy;  /* Направление по вертикали: -1 вверх, 1 вниз. */
+int ball_x;
+int ball_y;
+int ball_dx;
+int ball_dy;
 
-/* Храним вертикальную координату центра каждой ракетки. */
-int left_racket_y;   /* Центр левой ракетки. */
-int right_racket_y;  /* Центр правой ракетки. */
+/* Вертикальные координаты центров ракеток. */
+int left_racket_y;
+int right_racket_y;
 
-/* Счёт игроков и последняя введённая команда. */
-int left_score;   /* Количество очков левого игрока. */
-int right_score;  /* Количество очков правого игрока. */
-char command;     /* Текущая команда: A, Z, K, M или пробел. */
+/* Счет и общее состояние игры. */
+int left_score;
+int right_score;
+char command;
+int goal;
+int winner;
 
-/* Переменные общего состояния игры. */
-int goal;    /* 0 — гола нет, 1 — слева, 2 — справа. */
-int winner;  /* 0 — победителя нет, 1 — левый, 2 — правый. */
+void draw_field(void);
+char read_command(void);
+void move_left_racket(void);
+void move_right_racket(void);
+void move_ball(void);
+void check_collision(void);
+void check_goal(void);
+void check_winner(void);
 
-/* Объявления всех функций нужны до их первого вызова в main(). */
-void draw_field(void);         /* Рисует текущее состояние игры. */
-char read_command(void);       /* Читает и возвращает корректную команду. */
-void move_left_racket(void);   /* Перемещает левую ракетку. */
-void move_right_racket(void);  /* Перемещает правую ракетку. */
-void move_ball(void);          /* Перемещает мяч на один шаг. */
-void check_collision(void);    /* Проверяет стены и ракетки. */
-void check_goal(void);         /* Проверяет гол и изменяет счёт. */
-void check_winner(void);       /* Проверяет достижение 21 очка. */
+void print_score(int left, int right) {
+    printf("Player 1: %d                                      Player 2: %d\n",
+           left, right);
+}
 
-int main(void)  /* Главная функция управляет последовательностью игры. */
-{
-    ball_x = WIDTH / 2;   /* Помещаем мяч по центру поля по горизонтали. */
-    ball_y = HEIGHT / 2;  /* Помещаем мяч по центру поля по вертикали. */
-    ball_dx = 1;          /* В начале мяч летит вправо. */
-    ball_dy = 1;          /* В начале мяч летит вниз. */
+void print_cell(int row, int col) {
+    int half_racket = RACKET_SIZE / 2;
 
-    left_racket_y = HEIGHT / 2;   /* Ставим левую ракетку в центр. */
-    right_racket_y = HEIGHT / 2;  /* Ставим правую ракетку в центр. */
+    if (row == 0 || row == HEIGHT - 1) {
+        printf("-");
+    } else if (col == 0 || col == WIDTH - 1) {
+        printf("|");
+    } else if (col == ball_x && row == ball_y) {
+        printf("O");
+    } else if (col == WIDTH / 2 && row % 2 == 0) {
+        printf("|");
+    } else if (col == 2 &&
+               row >= left_racket_y - half_racket &&
+               row <= left_racket_y + half_racket) {
+        printf("|");
+    } else if (col == WIDTH - 3 &&
+               row >= right_racket_y - half_racket &&
+               row <= right_racket_y + half_racket) {
+        printf("|");
+    } else {
+        printf(" ");
+    }
+}
 
-    left_score = 0;   /* Обнуляем счёт левого игрока. */
-    right_score = 0;  /* Обнуляем счёт правого игрока. */
-    command = ' ';    /* Начальное значение команды — пропуск хода. */
-    goal = 0;         /* В начале гола нет. */
-    winner = 0;       /* В начале победителя нет. */
+void draw_field(void) {
+    int row;
+    int col;
 
-    while (winner == 0)  /* Повторяем ходы, пока никто не победил. */
-    {
-        draw_field();                 /* Показываем текущее состояние поля. */
-        command = read_command();     /* Ждём корректную команду игрока. */
-        move_left_racket();           /* При A или Z двигаем левую ракетку. */
-        move_right_racket();          /* При K или M двигаем правую ракетку. */
-        move_ball();                  /* После команды перемещаем мяч. */
-        check_collision();            /* Изменяем направление при столкновении. */
-        check_goal();                 /* Проверяем выход мяча за боковую границу. */
-        check_winner();               /* Проверяем, набрал ли игрок 21 очко. */
+    printf("\033[H\033[J");
+    print_score(left_score, right_score);
+
+    for (row = 0; row < HEIGHT; row++) {
+        for (col = 0; col < WIDTH; col++) {
+            print_cell(row, col);
+        }
+        printf("\n");
+    }
+}
+
+char read_command(void) {
+    int input;
+
+    while (1) {
+        input = getchar();
+
+        if (input == 'A' || input == 'a' ||
+            input == 'Z' || input == 'z' ||
+            input == 'K' || input == 'k' ||
+            input == 'M' || input == 'm' ||
+            input == ' ') {
+            return (char)input;
+        }
+    }
+}
+
+void move_left_racket(void) {
+    if ((command == 'A' || command == 'a') && left_racket_y > 2) {
+        left_racket_y--;
+    } else if ((command == 'Z' || command == 'z') &&
+               left_racket_y < HEIGHT - 3) {
+        left_racket_y++;
+    }
+}
+
+void move_right_racket(void) {
+    if ((command == 'K' || command == 'k') && right_racket_y > 2) {
+        right_racket_y--;
+    } else if ((command == 'M' || command == 'm') &&
+               right_racket_y < HEIGHT - 3) {
+        right_racket_y++;
+    }
+}
+
+void move_ball(void) {
+    ball_x += ball_dx;
+    ball_y += ball_dy;
+}
+
+void check_collision(void) {
+    if (ball_y <= 1) {
+        ball_y = 1;
+        ball_dy = 1;
+    } else if (ball_y >= HEIGHT - 2) {
+        ball_y = HEIGHT - 2;
+        ball_dy = -1;
     }
 
-    draw_field();  /* В последний раз показываем поле и итоговый счёт. */
-    if (winner == 1)  /* Значение 1 означает победу левого игрока. */
-    {
-        printf("Left player wins!\n");  /* Поздравляем левого игрока. */
+    if (ball_x == 2 && ball_dx < 0 &&
+        ball_y >= left_racket_y - RACKET_SIZE / 2 &&
+        ball_y <= left_racket_y + RACKET_SIZE / 2) {
+        ball_dx = 1;
+    } else if (ball_x == WIDTH - 3 && ball_dx > 0 &&
+               ball_y >= right_racket_y - RACKET_SIZE / 2 &&
+               ball_y <= right_racket_y + RACKET_SIZE / 2) {
+        ball_dx = -1;
     }
-    else  /* Если победитель не левый, значит победил правый игрок. */
-    {
-        printf("Right player wins!\n");  /* Поздравляем правого игрока. */
+}
+
+void check_goal(void) {
+    goal = 0;
+
+    if (ball_x <= 0) {
+        right_score++;
+        goal = 1;
+    } else if (ball_x >= WIDTH - 1) {
+        left_score++;
+        goal = 2;
     }
 
-    return 0;  /* Сообщаем операционной системе об успешном завершении. */
+    if (goal != 0) {
+        ball_x = WIDTH / 2;
+        ball_y = HEIGHT / 2;
+        ball_dy = -ball_dy;
+        ball_dx = (goal == 1) ? 1 : -1;
+    }
+}
+
+void check_winner(void) {
+    if (left_score >= WIN_SCORE) {
+        winner = 1;
+    } else if (right_score >= WIN_SCORE) {
+        winner = 2;
+    } else {
+        winner = 0;
+    }
+}
+
+int main(void) {
+    ball_x = WIDTH / 2;
+    ball_y = HEIGHT / 2;
+    ball_dx = 1;
+    ball_dy = 1;
+
+    left_racket_y = HEIGHT / 2;
+    right_racket_y = HEIGHT / 2;
+
+    left_score = 0;
+    right_score = 0;
+    command = ' ';
+    goal = 0;
+    winner = 0;
+
+    while (winner == 0) {
+        draw_field();
+        command = read_command();
+        move_left_racket();
+        move_right_racket();
+        move_ball();
+        check_collision();
+        check_goal();
+        check_winner();
+    }
+
+    draw_field();
+
+    if (winner == 1) {
+        printf("Left player wins!\n");
+    } else {
+        printf("Right player wins!\n");
+    }
+
+    return 0;
 }
