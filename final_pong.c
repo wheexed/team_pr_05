@@ -43,6 +43,8 @@ void print_cell(int row, int col) {
         printf("-");
     } else if (col == 0 || col == WIDTH - 1) {
         printf("|");
+    } else if (col == ball_x && row == ball_y) {
+        printf("O");
     } else if (col == WIDTH / 2 && row % 2 == 0) {
         printf("|");
     } else if (col == 2 &&
@@ -53,8 +55,6 @@ void print_cell(int row, int col) {
                row >= right_racket_y - half_racket &&
                row <= right_racket_y + half_racket) {
         printf("|");
-    } else if (col == ball_x && row == ball_y) {
-        printf("O");
     } else {
         printf(" ");
     }
